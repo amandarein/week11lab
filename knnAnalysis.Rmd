@@ -11,9 +11,12 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r load-packages, include=FALSE}
+#install.packages("naniar")
 library(dplyr)
 library(magrittr)
 library(knitr)
+library(naniar)
+library(ggplot2)
 ```
  
 # 1: Load in the data and rename columns
@@ -26,25 +29,21 @@ library(knitr)
 
 # Read in the data and labels
 
-comm_data = read.csv("tv_commercial_datasets_CNN_Cleaned.csv",
-                     check.names = FALSE,
-                     stringsAsFactors = FALSE)
-# comm_data <- read_csv('tv_commercial_datasets_CNN_Cleaned.csv')
+cancer_data = read.csv("hcc.csv")
+View(cancer_data)
 
-labels = read.csv("cnn_commmercial_label.csv",
-                     check.names = FALSE,
-                     stringsAsFactors = FALSE)
+gg_miss_var(cancer_data[c(1, 2, 3, 4, 5)])
+vis_miss(cancer_data[c(1, 2, 3, 4, 5)])
+ggplot(data=cancer_data)
 
-# Convert the columns into rows and add one that contains the missing label
-labels_new<-as.data.frame(t(labels))
-labels_new <- cbind("shot_length", labels_new)
+cancer_data <- cancer_data[-c(5, 8, 9, 18, 25, 26, 46, 47, 48, 49)]
+cancer_data_2[cancer_data_2=="?"] <- NA
 
-# Rename the columns
-colnames(comm_data) <- labels_new
+cancer_data_2 <- cancer_data[complete.cases(cancer_data), ]
 
-# Scaling the data
-comm_data[, -20] <- lapply(comm_data[, -20],function(x) scale(x))
+cancer_data_2[cancer_data_2=="?"] <- NA
 
+View(cancer_data_2)
 ```
 
 # 2. Base rate and split
