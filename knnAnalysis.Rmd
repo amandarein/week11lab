@@ -2,7 +2,13 @@
 title: "knn Analysis"
 author: "Kay, Belen, Amanda"
 date: "4/14/2021"
-output: html_document
+output:
+  html_document:
+    toc: TRUE
+    theme: journal
+    toc_float: TRUE
+editor_options:
+  chunk_output_type: console
 ---
 
 
@@ -19,24 +25,25 @@ library(naniar)
 library(ggplot2)
 ```
  
-# 1: Load in the data and rename columns
+# Find out which columns have many missing values so that they can be discarded
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 
 cancer_data = read.csv("hcc.csv")
 cancer_data[cancer_data=="?"] <- NA
 
 gg_miss_var(cancer_data)
+```
 
+# Remove the columns with many missing values and columns that affect accuracy
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
 cancer_data_2 <- cancer_data[,colSums(is.na(cancer_data))<3]
 
 cancer_data_2 <- cancer_data_2[complete.cases(cancer_data_2), ]
 
 
-table(cancer_data_2$Class)
-
 # The split between is 96 survivors of cancer and 63 victims of cancer.
 
-table(cancer_data_2$Class)[2] / sum(table(cancer_data_2$Class))
+split <- table(cancer_data_2$Class)[2] / sum(table(cancer_data_2$Class))
 
 # The base rate is 60.4 % for identifying if a patient would survive or not.
 
@@ -51,15 +58,19 @@ cancer_data_2[, -11] <- lapply(cancer_data_2[, -11],function(x) scale(x))
 stat_correlations <- cor(cancer_data_2)
 # View(stat_correlations)
 
-# No variables are highly correlated so we will keep all of them
+# These variables highly affected accuracy, as we found by plotting what the accuracy plot looks like without each column
+cancer_data_2 <- cancer_data_2[, -c(5, 6, 9)]
+```
 
+# Plot k vs. accuracy to see how many neighbors to use
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
 set.seed(1982)
 cancer_data_train_rows = sample(1:nrow(cancer_data_2),
                               round(0.8 * nrow(cancer_data_2), 0),
                               replace = FALSE)
 
 # Check to make sure we have 80% of the rows
-length(cancer_data_train_rows) / nrow(cancer_data_2)
+percent_or_rows = length(cancer_data_train_rows) / nrow(cancer_data_2)
 
 # Rows used in training set
 cancer_data_train = cancer_data_2[cancer_data_train_rows, ]
@@ -68,8 +79,8 @@ cancer_data_train = cancer_data_2[cancer_data_train_rows, ]
 cancer_data_test = cancer_data_2[-cancer_data_train_rows, ]
 
 # Check the number of rows in each set.
-nrow(cancer_data_train)
-nrow(cancer_data_test)
+# nrow(cancer_data_train)
+# nrow(cancer_data_test)
 
 # Figure out which K to use
 
@@ -88,20 +99,18 @@ chooseK = function(k, train_set, val_set, train_class, val_class){
   test <- conf_mat
 
   # Accuracy = (TP + TN) / (TP + TN + FP + FN)
-  accu = conf_mat[2,2]/ sum(conf_mat[2,2], conf_mat[2,1])
+  accu = sum(conf_mat[row(conf_mat) == col(conf_mat)]) / sum(conf_mat)
 
-  sens = conf_mat[2,2]/ sum(conf_mat[2,2], conf_mat[2,1])
-
-  cbind(k = k, sensitivity = sens)
+  cbind(k = k, accuracy = accu)
 }
 
 knn_diff_k_cancer = sapply(seq(1, 21, by = 2),  #<- set k to be odd number from 1 to 21
                          function(x) chooseK(x,
                                              train_set =
-                                               cancer_data_train[, -11],
-                                             val_set = cancer_data_test[, -11],
-                                             train_class = cancer_data_train[, 11],
-                                             val_class = cancer_data_test[, 11]))
+                                               cancer_data_train[, -c( 8)],
+                                             val_set = cancer_data_test[, -c(8)],
+                                             train_class = cancer_data_train[, 8],
+                                             val_class = cancer_data_test[, 8]))
 
 
 knn_diff_k_cancer = tibble(k = knn_diff_k_cancer[1,],
@@ -111,13 +120,17 @@ ggplot(knn_diff_k_cancer,
        aes(x = k, y = accuracy)) +
   geom_line(color = "orange", size = 1.5) +
   geom_point(size = 3)
+```
 
-# Try 15 nearest neighbors
+# Run KNN analysis with 3 nearest neighbors
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
 
-cancer_15NN <-  knn(train = cancer_data_train[, -11],
-               test = cancer_data_test[, -11],
-               cl = cancer_data_train[, 11],
-               k = 15,
+# Try 3 nearest neighbors
+
+cancer_15NN <-  knn(train = cancer_data_train[, -8],
+               test = cancer_data_test[, -8],
+               cl = cancer_data_train[, 8],
+               k = 3,
                use.all = TRUE,
                prob = TRUE)
 
@@ -126,30 +139,18 @@ kNN_res = table(cancer_15NN,
 
 conf_matrix_initial <- kNN_res
 
-conf_matrix_initial
+# conf_matrix_initial
 
 library(caret)
 install.packages("e1071")
 library(e1071)
-
-test <- confusionMatrix(as.factor(cancer_15NN), as.factor(cancer_data_test$Class), positive = "1", dnn=c("Prediction", "Actual"), mode = "sens_spec")
-
-test
 ```
 
-<!-- # 8. Create initial confusion matrix -->
-<!-- ```{r, message=FALSE, echo = FALSE, warning=FALSE} -->
-<!-- #8 Create an initial confusion matrix using the table function and pass it to a object. (xx <- your confusion matrix) -->
+# Analyze the accuracy of the model
+The accuracy is now up to 71.8%.
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+conf_matrix <- confusionMatrix(as.factor(cancer_15NN), as.factor(cancer_data_test$Class), positive = "1", dnn=c("Prediction", "Actual"), mode = "sens_spec")
 
 
-<!-- ``` -->
-
-<!-- # 9.Comment on confusion matrix model output -->
-<!-- The model output shows that the accuracy of this three nearest neighbors analysis was about 76% accurate. This seems like a relatively good model for prediction, especially compared to base rate, but still not exactly where I would want it to be. The sensitivity, aka the true positive rate, was placed at 85% while the specificity was only 59%. The true positive rate is good, because we mostly just care about identifying commercials and less about non-commercials. -->
-<!-- ```{r, message=FALSE, echo = FALSE, warning=FALSE} -->
-<!-- #9  Run the confusion matrix function and comment on the model output -->
-
-<!-- confusionMatrix(as.factor(comm_3NN), as.factor(comm_data_test$label), positive = "1", dnn=c("Prediction", "Actual"), mode = "sens_spec") -->
-
-<!-- # The model output shows that the accuracy of this three nearest neighbors analysis was about 76% accurate. This seems like a relatively good model for prediction, especially compared to base rate, but still not exactly where I would want it to be. The sensitivity, aka the true positive rate, was placed at 85% while the specificity was only 59%. The true positive rate is good, because we mostly just care about identifying commercials and less about non-commercials. -->
-
+# The accuracy is now up to 71.8%
+```
