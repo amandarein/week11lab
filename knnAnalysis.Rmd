@@ -1,0 +1,253 @@
+---
+title: "knn Analysis"
+author: "Kay, Belen, Amanda"
+date: "4/14/2021"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load-packages, include=FALSE}
+library(dplyr)
+library(magrittr)
+library(knitr)
+```
+ 
+# 1: Load in the data and rename columns
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+#1
+#Load in the data, both the commercial dataset and the labels. You'll need to the place the labels on the columns. The dataset "tv_commercialsets-CNN_Cleaned.csv",  is data collected about the features of commercials on CNN. We can try to predict what segments of video are commercials based on their audio and video components. More information on the datasets can be found data.world:
+# https://data.world/kramea/tv-commercial-detection/workspace/file?filename=tv_commercial_datasets%2FBBC_Cleaned.csv
+
+#You can use the function colnames() to apply the labels (hint: you might need to reshape the labels to make this work)
+
+# Read in the data and labels
+
+comm_data = read.csv("tv_commercial_datasets_CNN_Cleaned.csv",
+                     check.names = FALSE,
+                     stringsAsFactors = FALSE)
+# comm_data <- read_csv('tv_commercial_datasets_CNN_Cleaned.csv')
+
+labels = read.csv("cnn_commmercial_label.csv",
+                     check.names = FALSE,
+                     stringsAsFactors = FALSE)
+
+# Convert the columns into rows and add one that contains the missing label
+labels_new<-as.data.frame(t(labels))
+labels_new <- cbind("shot_length", labels_new)
+
+# Rename the columns
+colnames(comm_data) <- labels_new
+
+# Scaling the data
+comm_data[, -20] <- lapply(comm_data[, -20],function(x) scale(x))
+
+```
+
+# 2. Base rate and split
+The split between commercial and non-commercial is 8134 non-commercial and 14411 commercial. The base rate is 63.9 % for correctly picking out a commercial.
+
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+#2. Determine the split between commercial and non-commercial then calculate the base rate, assume 1 is the commercial label and -1 is the non-commercial label 
+
+table(comm_data$label)
+
+# The split between commercial and non-commercial is 8134 non-commercial and 14411 commercial.
+
+table(comm_data$label)[2] / sum(table(comm_data$label))
+
+# The base rate is 63.9 % for correctly picking out a commercial. 
+```
+
+# 3. Drop columns w _var in the name
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+#3. Since there are columns that contain different metrics for the same variable (i.e. any column that ends in 'mn' is the mean of that variable, while any column that ends in 'var' is the variance of that variable), we don't need to keep both, drop all the columns that include var
+
+# Remove any column that contained "_var"
+clean_comm_data <- comm_data[, -grep("var", colnames(comm_data))]
+```
+
+# 4. Check correlations
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+#4.  Before we run kNN, sometimes it's good to check to make sure that our variables are not highly correlated. Use the cor() function on 'your_dataframe', label it 'commercial_correlations', and view the data, because remember kNN doesn't work well in high dimensions. 
+
+commercial_correlations <- cor(clean_comm_data)
+
+# View(commercial_correlations)
+
+```
+
+# 5. Determine which varibles to remove
+I will remove motion_distr_mn and frame_diff_dist_mn because they seem to be highly correlated with each other as well as motion_dist_mn, which seems to be concerning, as well as relatively highly correlated with some other variables. spectral_flux_mn and spectral_roll_off_mn were very highly correlated with other variables, so I removed these to reduce any redundancies.
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+#5. Determine which variables to remove, high correlations start around .7 or below -.7 I would especially remove variables that appear to be correlated with more than one variable. List your rationale here:
+
+# I will remove motion_distr_mn and frame_diff_dist_mn because they seem to be highly correlated with each other as well as motion_dist_mn, which seems to be concerning, as well as relatively highly correlated with some other variables. spectral_flux_mn and spectral_roll_off_mn were very highly correlated with other variables, so I removed these to reduce any redundancies.
+
+clean_comm_data <- clean_comm_data %>% select(-contains("motion_distr_mn"))
+clean_comm_data <- clean_comm_data %>% select(-contains("spectral_flux_mn"))
+clean_comm_data <- clean_comm_data %>% select(-contains("frame_diff_dist_mn"))
+clean_comm_data <- clean_comm_data %>% select(-contains("spectral_roll_off_mn"))
+
+
+```
+
+# 6. Generate train and test sets
+Also, check the number of rows in each set.
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+#6. Use the index to generate a train and test sets, then check the row counts to be safe. 
+
+set.seed(1982)
+comm_data_train_rows = sample(1:nrow(clean_comm_data),
+                              round(0.8 * nrow(clean_comm_data), 0),
+                              replace = FALSE)
+
+# Check to make sure we have 80% of the rows
+length(comm_data_train_rows) / nrow(clean_comm_data)
+
+# Rows used in training set
+comm_data_train = clean_comm_data[comm_data_train_rows, ] 
+
+# Rows not used in training set, aka the test set
+comm_data_test = clean_comm_data[-comm_data_train_rows, ]
+
+# Check the number of rows in each set.
+nrow(comm_data_train)
+nrow(comm_data_test)
+
+```
+
+# 7. Train the classifer using k=3
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+#7 Train the classifier using k = 3, remember to set.seed so you can repeat the output and to use the labels as a vector for the class (not a index of the dataframe)
+
+install.packages("class") 
+library(class)
+
+set.seed(1982)
+
+comm_3NN <-  knn(train = comm_data_train[, -7],
+               test = comm_data_test[, -7],
+               cl = comm_data_train$label,
+               k = 3,
+               use.all = TRUE,
+               prob = TRUE)
+```
+
+# 8. Create initial confusion matrix
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+#8 Create an initial confusion matrix using the table function and pass it to a object. (xx <- your confusion matrix)
+
+kNN_res = table(comm_3NN,
+                comm_data_test$label)
+
+conf_matrix_initial <- kNN_res
+
+conf_matrix_initial
+```
+
+# 9.Comment on confusion matrix model output
+The model output shows that the accuracy of this three nearest neighbors analysis was about 76% accurate. This seems like a relatively good model for prediction, especially compared to base rate, but still not exactly where I would want it to be. The sensitivity, aka the true positive rate, was placed at 85% while the specificity was only 59%. The true positive rate is good, because we mostly just care about identifying commercials and less about non-commercials.
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+#9  Run the confusion matrix function and comment on the model output
+
+library(caret)
+
+confusionMatrix(as.factor(comm_3NN), as.factor(comm_data_test$label), positive = "1", dnn=c("Prediction", "Actual"), mode = "sens_spec")
+
+# The model output shows that the accuracy of this three nearest neighbors analysis was about 76% accurate. This seems like a relatively good model for prediction, especially compared to base rate, but still not exactly where I would want it to be. The sensitivity, aka the true positive rate, was placed at 85% while the specificity was only 59%. The true positive rate is good, because we mostly just care about identifying commercials and less about non-commercials.
+
+```
+
+# 10. Run the chooseK function
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+#10 Run the "chooseK" function to find the perfect K, while using sapply() function on chooseK() to test k from 1 to 21 (only selecting the odd numbers), and set the train_set argument to 'commercial_train', val_set to 'commercial_test', train_class to the "label"   column of 'commercial_train', and val_class to the "label" column of 'commercial_test'. Label this  "knn_diff_k_com"
+
+chooseK = function(k, train_set, val_set, train_class, val_class){
+  set.seed(1)
+  class_knn = knn(train = train_set,
+                  test = val_set,
+                  cl = train_class,
+                  k = k,
+                  use.all = TRUE)
+  conf_mat = table(class_knn, val_class)
+  
+  test <- conf_mat
+  
+  # Accuracy = (TP + TN) / (TP + TN + FP + FN)
+  accu = conf_mat[2,2]/ sum(conf_mat[2,2], conf_mat[2,1])
+
+  sens = conf_mat[2,2]/ sum(conf_mat[2,2], conf_mat[2,1])
+  
+  cbind(k = k, sensitivity = sens)
+}
+
+knn_diff_k_com = sapply(seq(1, 21, by = 2),  #<- set k to be odd number from 1 to 21
+                         function(x) chooseK(x, 
+                                             train_set =
+                                               comm_data_train[, -7],
+                                             val_set = comm_data_test[, -7],
+                                             train_class = comm_data_train$label,
+                                             val_class = comm_data_test$label))
+
+```
+
+# 11. Create a dataframe to visualize differences in accuracy based on K
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+#11 Create a dataframe so we can visualize the difference in accuracy based on K, convert the matrix to a dataframe
+
+knn_diff_k_com = tibble(k = knn_diff_k_com[1,],
+                             accuracy = knn_diff_k_com[2,])
+```
+
+# 12. Use ggplot to display output and comment on k to select
+I would choose 7 for a KNN analysis, because that seems to be the number of neighbors with the highest accuracy by far before there is any drop-off.
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+#12 Use ggplot to show the output and comment on the k to select.
+
+ggplot(knn_diff_k_com,
+       aes(x = k, y = accuracy)) +
+  geom_line(color = "orange", size = 1.5) +
+  geom_point(size = 3)
+
+# I would choose 7 for a KNN analysis, because that seems to be the number of neighbors with the highest accuracy by far before there is any drop-off.
+
+```
+
+# 13. Rerun model with new k-value
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+#13 Rerun the model  with the k you selected, assuming it's different. 
+
+comm_7NN <-  knn(train = comm_data_train[, -7],
+               test = comm_data_test[, -7],
+               cl = comm_data_train$label,
+               k = 7,
+               use.all = TRUE,
+               prob = TRUE)
+```
+
+#14. Use confusion matrix to measure quality of new model
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+#14 Use the confusion matrix function to measure the quality of the new model.
+
+confusionMatrix(as.factor(comm_7NN), as.factor(comm_data_test$label), positive = "1", dnn=c("Prediction", "Actual"), mode = "sens_spec")
+```
+
+# 15. Summarize differences
+The results, after using 7 nearest neighbors rather than 3, gives us a model that is about 78% accurate. In terms of accuracy, which is a measure of how many commercials we predicted correctly, this is not much more than when we used three nearest neighbors. If we decide to focus on accuracy, then a three nearest neighbor analysis is probably sufficient. 
+
+However, it seems that what we might care most about is just correctly predicting the positives (i.e. we just want to know what are commercials). For this reason, we may want to focus on increasing sensitivity, which is also known as the true positive rate. In this scenario, we would want to increase the number of true positives and decrease the number of false negatives, in order to positively identify as many commercials as possible. The sensitivity on this model was 88%, which is 3% higher than that of the three nearest neighbors analysis. If we decide this is the most important metric, it seems that using 7 nearest neighbors might be worth looking into.
+
+
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+#15 Summarize the differences in language Mr. Rooney may actually understand. Include a discussion on which approach k=3 or k="optimal" is the better method moving forward for "MEH". Most importantly draft comments about the overall approach and model quality as it relates to addressing the problem proposed by Ed. 
+
+# The results, after using 7 nearest neighbors rather than 3, gives us a model that is about 78% accurate. In terms of accuracy, which is a measure of how many commercials we predicted correctl, this is not much more than when we used three nearest neighbors. If we decide to focus on accuracy, then a three nearest neighbor analysis is probably sufficient. 
+
+#However, it seems that what we might care most about is just correctly predicting the positives (i.e. we just want to know what are commercials). For this reason, we may want to focus on increasing sensitivity, which is also known as the true positive rate. In this scenario, we would want to increase the number of true positives and decrease the number of false negatives, in order to positively identify as many commercials as possible. The sensitivity on this model was 88%, which is 3% higher than that of the three nearest neighbors analysis. If we decide this is the most important metric, it seems that using 7 nearest neighbors might be worth looking into.
+
+```
+
