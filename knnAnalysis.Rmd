@@ -139,9 +139,11 @@ cancer_15NN <-  knn(train = cancer_data_train[, -8],
                prob = TRUE)
 
 str(cancer_15NN)
+View(cancer_15NN)
 
 kNN_res = table(cancer_15NN,
                 cancer_data_test$Class)
+View(kNN_res)
 
 conf_matrix_initial <- kNN_res
 
@@ -170,11 +172,23 @@ conf_matrix$byClass["F1"]
 # install.packages("MLmetrics")
 library(MLmetrics)
 
-LogLoss(as.numeric(cancer_15NN), as.numeric(cancer_data_test$Class))
-#We want this number to be rather close to 0, so this is a pretty terrible result. 
+LogLoss(as.numeric(attributes(cancer_15NN)$prob), as.numeric(cancer_data_test$Class))
+# #We want this number to be rather close to 0, so this is a pretty terrible result. 
+# 
 
-F1_Score(as.numeric(cancer_15NN),as.numeric(cancer_data_test$Class))
 
-?MLmetrics
+cancer_data_test$result = cancer_15NN
+F1_Score(as.numeric(cancer_data_test$result),as.numeric(cancer_data_test$Class))
+ 
+
+cancer_15NN$prob
+cancer15<-as.data.frame(cancer_15NN.prob)
+# ?MLmetrics
+attr(cancer_15NN, prob)
+
+# attributes(cancer_15NN)$prob
+
 
 ```
+
+# Data set 2: Reviews of coffee shops
