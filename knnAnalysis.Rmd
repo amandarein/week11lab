@@ -24,8 +24,11 @@ library(knitr)
 library(naniar)
 library(ggplot2)
 ```
- 
-# Find out which columns have many missing values so that they can be discarded
+
+# Data set 1: Outcomes of cancer patients
+This first data set contains the overall outcomes of cancer patients, along with many other data points about the patient's health. The question we are hoping to answer is as follows: after cleaning data and removing any data points that create noise, can we create a KNN model that uses some health factors to predict whether or not the patient had a positive outcome at a rate better than the baseline?
+
+## Find out which columns have many missing values so that they can be discarded
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 
 cancer_data = read.csv("hcc.csv")
@@ -34,7 +37,7 @@ cancer_data[cancer_data=="?"] <- NA
 gg_miss_var(cancer_data)
 ```
 
-# Remove the columns with many missing values and columns that affect accuracy
+We removed the columns with many missing values and columns that affect accuracy. After that, we found that the base level for identifying if a patient would survive or not was 60.4%.
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 cancer_data_2 <- cancer_data[,colSums(is.na(cancer_data))<3]
 
@@ -62,7 +65,8 @@ stat_correlations <- cor(cancer_data_2)
 cancer_data_2 <- cancer_data_2[, -c(5, 6, 9)]
 ```
 
-# Plot k vs. accuracy to see how many neighbors to use
+## Plot k vs. accuracy to see how many neighbors to use
+Based on the plot that was created, 3 was the best number of neighbors for a higher accuracy level.
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 set.seed(1982)
 cancer_data_train_rows = sample(1:nrow(cancer_data_2),
@@ -122,7 +126,7 @@ ggplot(knn_diff_k_cancer,
   geom_point(size = 3)
 ```
 
-# Run KNN analysis with 3 nearest neighbors
+## Run KNN analysis with 3 nearest neighbors and analyze the accuracy of the model
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 
 # Try 3 nearest neighbors
@@ -133,6 +137,8 @@ cancer_15NN <-  knn(train = cancer_data_train[, -8],
                k = 3,
                use.all = TRUE,
                prob = TRUE)
+
+str(cancer_15NN)
 
 kNN_res = table(cancer_15NN,
                 cancer_data_test$Class)
@@ -146,11 +152,29 @@ install.packages("e1071")
 library(e1071)
 ```
 
-# Analyze the accuracy of the model
-The accuracy is now up to 71.8%.
+Originally, the baseline accuracy was around 60%;  accuracy is now up to 71.8%. The sensitivity is 75%, while the specificity is 67%. This means that the false positive rate is 33%, which is a bit high but certainly not terrible. The F1 value is 76.9%. All of these statistics are fairly good, especially when you compare the baseline to the prediction model.
+
+The kappa value is 0.410, which is relatively weak for a kappa value.
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 conf_matrix <- confusionMatrix(as.factor(cancer_15NN), as.factor(cancer_data_test$Class), positive = "1", dnn=c("Prediction", "Actual"), mode = "sens_spec")
 
+conf_matrix
+conf_matrix$overall["Accuracy"]
+conf_matrix$overall["Kappa"]
+conf_matrix$byClass["Sensitivity"]
+conf_matrix$byClass["Specificity"]
+conf_matrix$byClass["F1"]
 
-# The accuracy is now up to 71.8%
+
+
+# install.packages("MLmetrics")
+library(MLmetrics)
+
+LogLoss(as.numeric(cancer_15NN), as.numeric(cancer_data_test$Class))
+#We want this number to be rather close to 0, so this is a pretty terrible result. 
+
+F1_Score(as.numeric(cancer_15NN),as.numeric(cancer_data_test$Class))
+
+?MLmetrics
+
 ```
