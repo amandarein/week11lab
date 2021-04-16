@@ -25,8 +25,144 @@ library(naniar)
 library(ggplot2)
 ```
 
-# Data set 1: Outcomes of cancer patients
-This first data set contains the overall outcomes of cancer patients, along with many other data points about the patient's health. The question we are hoping to answer is as follows: after cleaning data and removing any data points that create noise, can we create a KNN model that uses some health factors to predict whether or not the patient had a positive outcome at a rate better than the baseline?
+# Data set 1: Reviews of coffee shops
+The first data set contains information from Yelp ratings for coffee shops in Austin, Texas. Each Yelp rating is logged with the name of the coffee shop, the content of the review, the numeric rating, the relative rating, whether the rating is considered high or low, the overall sentiment, the sentiment about the shop's vibe, the sentiment about its tea offerings,  the sentiment about the service they offer, etc. The question we are hoping to answer is as follows: after cleaning data to remove the data points creating noise, can we create a KNN model that uses some of these rating factors to predict whether or not the coffee shop was high rated?
+
+## Find out which columns have many missing values so that they can be discarded
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+coffee_data = read.csv("ratings_and_sentiments.csv")
+coffee_data[coffee_data=="?"] <- NA
+coffee_data[coffee_data==""] <- NA
+coffee_data[coffee_data=="#VALUE!"] <- NA
+gg_miss_var(coffee_data)
+```
+
+We removed the columns with many missing values and columns that affect accuracy. After that, we found that the base level for identifying if a patient would survive or not was 60.4%.
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+coffee_data_2 <- coffee_data[complete.cases(coffee_data), ]
+coffee_data_2 <- coffee_data_2[, -c(1, 2, 3, 4, 5)]
+
+split <- table(coffee_data_2$bool_HIGH)[2] / sum(table(coffee_data_2$bool_HIGH))
+
+# The base rate is 80.0% for identifying whether a coffee shop was high-rated or not.
+
+coffee_data_2 <- sapply(coffee_data_2, as.numeric)
+# Scale the data
+coffee_data_2 <- as.data.frame(coffee_data_2)
+
+coffee_data_2[, -c(1)] <- lapply(coffee_data_2[, -c(1)],function(x) scale(x))
+# Find correlations in the data 
+stat_correlations <- cor(coffee_data_2)
+View(stat_correlations)
+
+```
+
+## Plot k vs. accuracy to see how many neighbors to use
+Based on the plot that was created, 3 was the best number of neighbors for a higher accuracy level.
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+set.seed(1982)
+coffee_data_train_rows = sample(1:nrow(coffee_data_2),
+                              round(0.8 * nrow(coffee_data_2), 0),
+                              replace = FALSE)
+# Check to make sure we have 80% of the rows
+percent_or_rows = length(coffee_data_train_rows) / nrow(coffee_data_2)
+# Rows used in training set
+coffee_data_train = coffee_data_2[coffee_data_train_rows, ]
+# Rows not used in training set, aka the test set
+coffee_data_test = coffee_data_2[-coffee_data_train_rows, ]
+# Check the number of rows in each set.
+# nrow(coffee_data_train)
+# nrow(coffee_data_test)
+# Figure out which K to use
+# install.packages("class") 
+library(class)
+chooseK = function(k, train_set, val_set, train_class, val_class){
+  set.seed(1)
+  class_knn = knn(train = train_set,
+                  test = val_set,
+                  cl = train_class,
+                  k = k,
+                  use.all = TRUE)
+  conf_mat = table(class_knn, val_class)
+  test <- conf_mat
+  # Accuracy = (TP + TN) / (TP + TN + FP + FN)
+  accu = sum(conf_mat[row(conf_mat) == col(conf_mat)]) / sum(conf_mat)
+  cbind(k = k, accuracy = accu)
+}
+knn_diff_k_coffee = sapply(seq(1, 21, by = 2),  #<- set k to be odd number from 1 to 21
+                         function(x) chooseK(x,
+                                             train_set =
+                                               coffee_data_train[, -c(1)],
+                                             val_set = coffee_data_test[, -c(1)],
+                                             train_class = coffee_data_train[, 1],
+                                             val_class = coffee_data_test[, 1]))
+knn_diff_k_coffee = tibble(k = knn_diff_k_coffee[1,],
+                             accuracy = knn_diff_k_coffee[2,])
+ggplot(knn_diff_k_coffee,
+       aes(x = k, y = accuracy)) +
+  geom_line(color = "orange", size = 1.5) +
+  geom_point(size = 3)
+```
+
+## Run KNN analysis with 3 nearest neighbors and analyze the accuracy of the model
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+# Try 11 nearest neighbors
+coffee_11NN <-  knn(train = coffee_data_train[, -1],
+               test = coffee_data_test[, -1],
+               cl = coffee_data_train[, 1],
+               k = 11,
+               use.all = TRUE,
+               prob = TRUE)
+str(coffee_11NN)
+View(coffee_11NN)
+kNN_res = table(coffee_11NN,
+                coffee_data_test$bool_HIGH)
+View(kNN_res)
+conf_matrix_initial <- kNN_res
+# conf_matrix_initial
+install.packages("caret")
+library(caret)
+install.packages("e1071")
+library(e1071)
+install.packages("Rcpp")
+library(Rcpp)
+```
+
+
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
+conf_matrix <- confusionMatrix(as.factor(coffee_11NN), as.factor(coffee_data_test$bool_HIGH), positive = "1", dnn=c("Prediction", "Actual"), mode = "sens_spec")
+conf_matrix
+conf_matrix$overall["Accuracy"]
+conf_matrix$overall["Kappa"]
+conf_matrix$byClass["Sensitivity"]
+conf_matrix$byClass["Specificity"]
+conf_matrix$byClass["F1"]
+install.packages("MLmetrics")
+library(MLmetrics)
+LogLoss(as.numeric(attributes(coffee_11NN)$prob), as.numeric(coffee_data_test$bool_HIGH))
+
+# coffee_data_test$result = coffee_11NN
+# F1_Score(as.numeric(coffee_data_test$result),as.numeric(coffee_data_test$bool_HIGH))
+
+install.packages("ROCR")
+library(ROCR)
+
+pred <- prediction(as.numeric(attributes(coffee_11NN)$prob), as.numeric(coffee_data_test$bool_HIGH))
+View(pred)
+
+perf <- performance(pred,"tpr","fpr")
+
+plot(perf, colorize=TRUE)
+abline(a=0, b= 1)
+
+perf_AUC <- performance(pred,"auc")
+
+print(perf_AUC@y.values)
+
+```
+
+# Data set 2: Outcomes of cancer patients
+This second data set contains the overall outcomes of cancer patients, along with many other data points about the patient's health. The question we are hoping to answer is as follows: after cleaning data and removing any data points that create noise, can we create a KNN model that uses some health factors to predict whether or not the patient had a positive outcome at a rate better than the baseline?
 
 ## Find out which columns have many missing values so that they can be discarded
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
@@ -160,143 +296,4 @@ abline(a=0, b= 1)
 perf_AUC <- performance(pred,"auc")
 
 print(perf_AUC@y.values)
-```
-
-# Data set 2: Reviews of coffee shops
-The second data set contains information from Yelp ratings for coffee shops in Austin, Texas. Each Yelp rating is logged with the name of the coffee shop, the content of the review, the numeric rating, the relative rating, whether the rating is considered high or low, the overall sentiment, the sentiment about the shop's vibe, the sentiment about its tea offerings, and the sentiment about the service they offer. The question we are hoping to answer is as follows: after cleaning data to remove the data points creating noise, can we create a KNN model that uses some of these rating factors to predict whether or not the coffee shop was high rated?
-
-## Find out which columns have many missing values so that they can be discarded
-```{r, message=FALSE, echo = FALSE, warning=FALSE}
-coffee_data = read.csv("ratings_and_sentiments.csv")
-coffee_data[coffee_data=="?"] <- NA
-gg_miss_var(coffee_data)
-```
-
-We removed the columns with many missing values and columns that affect accuracy. After that, we found that the base level for identifying if a patient would survive or not was 60.4%.
-```{r, message=FALSE, echo = FALSE, warning=FALSE}
-High <- as.factor(ifelse(coffee_data$num_rating > 2.5, 1,0))
-coffee_data_2 <- coffee_data[,colSums(is.na(coffee_data))<3]
-coffee_data_2 <- coffee_data_2[complete.cases(coffee_data_2), ]
-coffee_data_2 <- cbind(coffee_data_2, High)
-
-split <- table(coffee_data_2$High)[2] / sum(table(coffee_data_2$High))
-
-# The base rate is 90.3% for identifying whether a coffee shop was high-rated or not.
-coffee_data_2 <- coffee_data_2[, -c(1, 2, 3, 4)] # remove non-numeric
-coffee_data_2 <- sapply(coffee_data_2, as.numeric)
-# Scale the data
-coffee_data_2 <- as.data.frame(coffee_data_2)
-coffee_data_2[, -c(1, 2, 9)] <- lapply(coffee_data_2[, -c(1, 2, 9)],function(x) scale(x))
-# Find correlations in the data 
-stat_correlations <- cor(coffee_data_2)
-# View(stat_correlations)
-
-```
-
-## Plot k vs. accuracy to see how many neighbors to use
-Based on the plot that was created, 3 was the best number of neighbors for a higher accuracy level.
-```{r, message=FALSE, echo = FALSE, warning=FALSE}
-set.seed(1982)
-coffee_data_train_rows = sample(1:nrow(coffee_data_2),
-                              round(0.8 * nrow(coffee_data_2), 0),
-                              replace = FALSE)
-# Check to make sure we have 80% of the rows
-percent_or_rows = length(coffee_data_train_rows) / nrow(coffee_data_2)
-# Rows used in training set
-coffee_data_train = coffee_data_2[coffee_data_train_rows, ]
-# Rows not used in training set, aka the test set
-coffee_data_test = coffee_data_2[-coffee_data_train_rows, ]
-# Check the number of rows in each set.
-# nrow(coffee_data_train)
-# nrow(coffee_data_test)
-# Figure out which K to use
-# install.packages("class") 
-library(class)
-chooseK = function(k, train_set, val_set, train_class, val_class){
-  set.seed(1)
-  class_knn = knn(train = train_set,
-                  test = val_set,
-                  cl = train_class,
-                  k = k,
-                  use.all = TRUE)
-  conf_mat = table(class_knn, val_class)
-  test <- conf_mat
-  # Accuracy = (TP + TN) / (TP + TN + FP + FN)
-  accu = sum(conf_mat[row(conf_mat) == col(conf_mat)]) / sum(conf_mat)
-  cbind(k = k, accuracy = accu)
-}
-knn_diff_k_coffee = sapply(seq(1, 21, by = 2),  #<- set k to be odd number from 1 to 21
-                         function(x) chooseK(x,
-                                             train_set =
-                                               coffee_data_train[, -c( 8)],
-                                             val_set = coffee_data_test[, -c(8)],
-                                             train_class = coffee_data_train[, 8],
-                                             val_class = coffee_data_test[, 8]))
-knn_diff_k_coffee = tibble(k = knn_diff_k_coffee[1,],
-                             accuracy = knn_diff_k_coffee[2,])
-ggplot(knn_diff_k_coffee,
-       aes(x = k, y = accuracy)) +
-  geom_line(color = "orange", size = 1.5) +
-  geom_point(size = 3)
-```
-
-## Run KNN analysis with 3 nearest neighbors and analyze the accuracy of the model
-```{r, message=FALSE, echo = FALSE, warning=FALSE}
-# Try 3 nearest neighbors
-coffee_15NN <-  knn(train = coffee_data_train[, -8],
-               test = coffee_data_test[, -8],
-               cl = coffee_data_train[, 8],
-               k = 3,
-               use.all = TRUE,
-               prob = TRUE)
-str(coffee_15NN)
-View(coffee_15NN)
-kNN_res = table(coffee_15NN,
-                coffee_data_test$Class)
-View(kNN_res)
-conf_matrix_initial <- kNN_res
-# conf_matrix_initial
-library(caret)
-install.packages("e1071")
-library(e1071)
-```
-
-
-```{r, message=FALSE, echo = FALSE, warning=FALSE}
-conf_matrix <- confusionMatrix(as.factor(coffee_15NN), as.factor(coffee_data_test$Class), positive = "1", dnn=c("Prediction", "Actual"), mode = "sens_spec")
-conf_matrix
-conf_matrix$overall["Accuracy"]
-conf_matrix$overall["Kappa"]
-conf_matrix$byClass["Sensitivity"]
-conf_matrix$byClass["Specificity"]
-conf_matrix$byClass["F1"]
-# install.packages("MLmetrics")
-library(MLmetrics)
-LogLoss(as.numeric(attributes(coffee_15NN)$prob), as.numeric(coffee_data_test$Class))
-# #We want this number to be rather close to 0, so this is a pretty terrible result. 
-# 
-coffee_data_test$result = coffee_15NN
-F1_Score(as.numeric(coffee_data_test$result),as.numeric(coffee_data_test$Class))
- 
-#coffeee_15NN$prob
-#coffee15<-as.data.frame(coffee_15NN.prob)
-# ?MLmetrics
-#attr(coffee_15NN, prob)
-# attributes(coffee_15NN)$prob
-
-# install.packages("ROCR")
-library(ROCR)
-
-pred <- prediction(as.numeric(attributes(coffee_15NN)$prob), as.numeric(coffee_data_test$Class))
-View(pred)
-
-perf <- performance(pred,"tpr","fpr")
-
-plot(perf, colorize=TRUE)
-abline(a=0, b= 1)
-
-perf_AUC <- performance(pred,"auc")
-
-print(perf_AUC@y.values)
-
 ```
