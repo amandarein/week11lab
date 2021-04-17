@@ -131,7 +131,7 @@ library(Rcpp)
 
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 conf_matrix <- confusionMatrix(as.factor(coffee_11NN), as.factor(coffee_data_test$bool_HIGH), positive = "1", dnn=c("Prediction", "Actual"), mode = "sens_spec")
-conf_matrix
+conf_matrix # 117 cases of actual = 0 and predicted = 1, 20 cases of actual = 1 and predicted = 0 -- false positive more of an issue
 conf_matrix$overall["Accuracy"]
 conf_matrix$overall["Kappa"]
 conf_matrix$byClass["Sensitivity"]
@@ -158,6 +158,23 @@ abline(a=0, b= 1)
 perf_AUC <- performance(pred,"auc")
 
 print(perf_AUC@y.values)
+
+#Quick function to explore various threshold levels and output a confusion matrix
+
+adjust_thres <- function(x, y, z) {
+  #x=pred_probablities, y=threshold, z=test_outcome
+  thres <- as.factor(ifelse(x > y, 1,0))
+  confusionMatrix(thres, z, positive = "1", dnn=c("Prediction", "Actual"), mode = "everything")
+}
+
+coffee_refactor <- as.data.frame(coffee_11NN)
+probs <- attributes(coffee_11NN)$prob
+coffee_refactor <- cbind(coffee_refactor, probs)
+coffee_refactor_1 <- mutate(coffee_refactor, `1` = ifelse(coffee_11NN == "1", probs, (1-probs)))
+coffee_refactor_1 <- mutate(coffee_refactor_1, `0` = ifelse(coffee_11NN == "0", probs, (1-probs)))
+
+
+adjust_thres(coffee_refactor_1$`1`,.60, as.factor(coffee_data_test$bool_HIGH))
 
 ```
 
@@ -296,4 +313,15 @@ abline(a=0, b= 1)
 perf_AUC <- performance(pred,"auc")
 
 print(perf_AUC@y.values)
+
+
+
+cancer_refactor <- as.data.frame(cancer_15NN)
+probs <- attributes(cancer_15NN)$prob
+cancer_refactor <- cbind(cancer_refactor, probs)
+cancer_refactor_1 <- mutate(cancer_refactor, `1` = ifelse(cancer_15NN == "1", probs, (1-probs)))
+cancer_refactor_1 <- mutate(cancer_refactor_1, `0` = ifelse(cancer_15NN == "0", probs, (1-probs)))
+
+
+adjust_thres(cancer_refactor_1$`1`,.70, as.factor(cancer_data_test$Class))
 ```
