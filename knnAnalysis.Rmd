@@ -142,7 +142,7 @@ conf_matrix$byClass["F1"]
 ```
 
 ### Log Loss
-We calculate the Log Loss of the model to be 0.55. This is a pretty good score! We don't have a balanced data set (80% of our data is for high-rated coffee shops!), so this is especially good for what we are working with.
+We calculate the Log Loss of the model to be 0.55. As Log Loss is a measure of uncertainty on a scale from 0.0 to 1.0, this is a decent score. Typically for balanced binary problems, 0.693 is an accepted baseline for a "good" Log Loss score. That beings said, we don't have a balanced data set (80% of our data is for high-rated coffee shops!), so this is not bad for what we are working with.
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 install.packages("MLmetrics")
 library(MLmetrics)
@@ -154,7 +154,6 @@ LogLoss(as.numeric(attributes(coffee_11NN)$prob), as.numeric(coffee_data_test$bo
 
 ### AUC
 The area under the receiver operating curve (ROC) below tells us how much the model can distinguish between classes, aka whether or not a coffee shop is high-rated. The greater our area under the curve, the better our model is at distinguishing between well-rated and poorly-rated coffee shops in Austin. We see that our AUC prints as 0.78, which is pretty good! Note that we also plot the y = x line to visualize the difference between our model (the colorful curve) and what it would be like to just randomly guess.
-
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 install.packages("ROCR")
 library(ROCR)
@@ -348,7 +347,6 @@ cancer_refactor_1 <- mutate(cancer_refactor_1, `0` = ifelse(cancer_3NN == "0", p
 
 adjust_thres(cancer_refactor_1$`1`,.70, as.factor(cancer_data_test$Class))
 ```
-
 
 # Concluding Analysis
 This lab was very informative for evaluating our ML models in R. We had a more fruitful analysis with our first data set because we had far more data after cleaning. It was hard to analyze our second model, since small adjustments could make massive changes and not be very representative. For example, we may have found that adjusting the threshold to something above 0.5 was actually helpful if we had a larger data set. 
