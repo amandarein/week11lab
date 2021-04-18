@@ -37,7 +37,7 @@ coffee_data[coffee_data=="#VALUE!"] <- NA
 gg_miss_var(coffee_data)
 ```
 
-We removed the columns with many missing values and columns that affect accuracy. After that, we found that the base level for identifying if a patient would survive or not was 60.4%.
+We removed the columns with many missing values and columns that affect accuracy. After that, we found that the base level for identifying if a patient would survive or not was 80.0%. In other words, there is an 80% chance that a coffee shop is high-rated.
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 coffee_data_2 <- coffee_data[complete.cases(coffee_data), ]
 coffee_data_2 <- coffee_data_2[, -c(1, 2, 3, 4, 5)]
@@ -53,12 +53,12 @@ coffee_data_2 <- as.data.frame(coffee_data_2)
 coffee_data_2[, -c(1)] <- lapply(coffee_data_2[, -c(1)],function(x) scale(x))
 # Find correlations in the data 
 stat_correlations <- cor(coffee_data_2)
-View(stat_correlations)
+# View(stat_correlations)
 
 ```
 
 ## Plot k vs. accuracy to see how many neighbors to use
-Based on the plot that was created, 3 was the best number of neighbors for a higher accuracy level.
+Based on the plot that was created (below), 11 is the best number of neighbors for a higher accuracy level.
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 set.seed(1982)
 coffee_data_train_rows = sample(1:nrow(coffee_data_2),
@@ -104,7 +104,7 @@ ggplot(knn_diff_k_coffee,
   geom_point(size = 3)
 ```
 
-## Run KNN analysis with 3 nearest neighbors and analyze the accuracy of the model
+## Run KNN analysis with 11 nearest neighbors and analyze the accuracy of the model
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 # Try 11 nearest neighbors
 coffee_11NN <-  knn(train = coffee_data_train[, -1],
@@ -113,11 +113,11 @@ coffee_11NN <-  knn(train = coffee_data_train[, -1],
                k = 11,
                use.all = TRUE,
                prob = TRUE)
-str(coffee_11NN)
-View(coffee_11NN)
+# str(coffee_11NN)
+# View(coffee_11NN)
 kNN_res = table(coffee_11NN,
                 coffee_data_test$bool_HIGH)
-View(kNN_res)
+# View(kNN_res)
 conf_matrix_initial <- kNN_res
 # conf_matrix_initial
 install.packages("caret")
@@ -128,27 +128,38 @@ install.packages("Rcpp")
 library(Rcpp)
 ```
 
-
+## Evaluate model {.tabset}
+### Confusion matrix
+This confusion matrix tells us that the accuracy is 84.8%, kappa is 28.5%, sensitivity is 97.3%, specificity is 24.0%, and F1 score is 91.4% (printed separately below). These are pretty good statistics, as the accuracy has gone up from our base rate of 80%, though the kappa is pretty low. Kappa measures the degree of agreement among raters, so this is something to keep in mind when analyzing the model.
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 conf_matrix <- confusionMatrix(as.factor(coffee_11NN), as.factor(coffee_data_test$bool_HIGH), positive = "1", dnn=c("Prediction", "Actual"), mode = "sens_spec")
 conf_matrix # 117 cases of actual = 0 and predicted = 1, 20 cases of actual = 1 and predicted = 0 -- false positive more of an issue
-conf_matrix$overall["Accuracy"]
-conf_matrix$overall["Kappa"]
-conf_matrix$byClass["Sensitivity"]
-conf_matrix$byClass["Specificity"]
+# conf_matrix$overall["Accuracy"]
+# conf_matrix$overall["Kappa"]
+# conf_matrix$byClass["Sensitivity"]
+# conf_matrix$byClass["Specificity"]
 conf_matrix$byClass["F1"]
+```
+
+### Log Loss
+We calculate the Log Loss of the model to be 0.55. As Log Loss is a measure of uncertainty on a scale from 0.0 to 1.0, this is a decent score. Typically for balanced binary problems, 0.693 is an accepted baseline for a "good" Log Loss score. That beings said, we don't have a balanced data set (80% of our data is for high-rated coffee shops!), so this is not bad for what we are working with.
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
 install.packages("MLmetrics")
 library(MLmetrics)
 LogLoss(as.numeric(attributes(coffee_11NN)$prob), as.numeric(coffee_data_test$bool_HIGH))
 
 # coffee_data_test$result = coffee_11NN
 # F1_Score(as.numeric(coffee_data_test$result),as.numeric(coffee_data_test$bool_HIGH))
+```
 
+### AUC
+The area under the receiver operating curve (ROC) below tells us how much the model can distinguish between classes, aka whether or not a coffee shop is high-rated. The greater our area under the curve, the better our model is at distinguishing between well-rated and poorly-rated coffee shops in Austin. We see that our AUC prints as 0.78, which is pretty good! Note that we also plot the y = x line to visualize the difference between our model (the colorful curve) and what it would be like to just randomly guess.
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
 install.packages("ROCR")
 library(ROCR)
 
 pred <- prediction(as.numeric(attributes(coffee_11NN)$prob), as.numeric(coffee_data_test$bool_HIGH))
-View(pred)
+# View(pred)
 
 perf <- performance(pred,"tpr","fpr")
 
@@ -156,11 +167,12 @@ plot(perf, colorize=TRUE)
 abline(a=0, b= 1)
 
 perf_AUC <- performance(pred,"auc")
-
 print(perf_AUC@y.values)
+```
 
-#Quick function to explore various threshold levels and output a confusion matrix
-
+## Adjust threshold
+We decided to adjust the threshold of the model to see if we can further improve accuracy. We have more false positives than false negatives according to our confusion matrix, so we will adjust the threshold to be higher. A higher threshold reduces the amount of times that the model will predict that the coffee shop is high-rated. Clearly, adjusting the threshold here to 0.6 has reduced the number of false positives that we get (117 to 105) but increased the number of false negatives (20 to 35!). The accuracy and sensitivity have also gone down, though the specificity went up. 
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
 adjust_thres <- function(x, y, z) {
   #x=pred_probablities, y=threshold, z=test_outcome
   thres <- as.factor(ifelse(x > y, 1,0))
@@ -177,6 +189,7 @@ coffee_refactor_1 <- mutate(coffee_refactor_1, `0` = ifelse(coffee_11NN == "0", 
 adjust_thres(coffee_refactor_1$`1`,.60, as.factor(coffee_data_test$bool_HIGH))
 
 ```
+
 
 # Data set 2: Outcomes of cancer patients
 This second data set contains the overall outcomes of cancer patients, along with many other data points about the patient's health. The question we are hoping to answer is as follows: after cleaning data and removing any data points that create noise, can we create a KNN model that uses some health factors to predict whether or not the patient had a positive outcome at a rate better than the baseline?
@@ -207,7 +220,7 @@ cancer_data_2 <- cancer_data_2[, -c(5, 6, 9)]
 ```
 
 ## Plot k vs. accuracy to see how many neighbors to use
-Based on the plot that was created, 3 was the best number of neighbors for a higher accuracy level.
+Based on the plot that was created, 15 was the best number of neighbors for a higher accuracy level.
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 set.seed(1982)
 cancer_data_train_rows = sample(1:nrow(cancer_data_2),
@@ -253,7 +266,7 @@ ggplot(knn_diff_k_cancer,
   geom_point(size = 3)
 ```
 
-## Run KNN analysis with 3 nearest neighbors and analyze the accuracy of the model
+## Run KNN analysis with 15 nearest neighbors and analyze the accuracy of the model
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 # Try 3 nearest neighbors
 cancer_15NN <-  knn(train = cancer_data_train[, -8],
@@ -262,11 +275,11 @@ cancer_15NN <-  knn(train = cancer_data_train[, -8],
                k = 3,
                use.all = TRUE,
                prob = TRUE)
-str(cancer_15NN)
-View(cancer_15NN)
+# str(cancer_15NN)
+# View(cancer_15NN)
 kNN_res = table(cancer_15NN,
                 cancer_data_test$Class)
-View(kNN_res)
+# View(kNN_res)
 conf_matrix_initial <- kNN_res
 # conf_matrix_initial
 library(caret)
@@ -274,36 +287,44 @@ install.packages("e1071")
 library(e1071)
 ```
 
+## Evaluate model {.tabset}
+
+### Confusion matrix
 Originally, the baseline accuracy was around 60%;  accuracy is now up to 71.8%. The sensitivity is 75%, while the specificity is 67%. This means that the false positive rate is 33%, which is a bit high but certainly not terrible. The F1 value is 76.9%. All of these statistics are fairly good, especially when you compare the baseline to the prediction model.
 
 The kappa value is 0.410, which is relatively weak for a kappa value.
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 conf_matrix <- confusionMatrix(as.factor(cancer_15NN), as.factor(cancer_data_test$Class), positive = "1", dnn=c("Prediction", "Actual"), mode = "sens_spec")
 conf_matrix
-conf_matrix$overall["Accuracy"]
-conf_matrix$overall["Kappa"]
-conf_matrix$byClass["Sensitivity"]
-conf_matrix$byClass["Specificity"]
-conf_matrix$byClass["F1"]
+# conf_matrix$overall["Accuracy"]
+# conf_matrix$overall["Kappa"]
+# conf_matrix$byClass["Sensitivity"]
+# conf_matrix$byClass["Specificity"]
+# conf_matrix$byClass["F1"]
+```
+
+### Log Loss
+The Log Loss score we get with this data is 5.8, which indicates that something is wrong (i.e. we have too little data?)
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
 # install.packages("MLmetrics")
 library(MLmetrics)
 LogLoss(as.numeric(attributes(cancer_15NN)$prob), as.numeric(cancer_data_test$Class))
-# #We want this number to be rather close to 0, so this is a pretty terrible result. 
-# 
-cancer_data_test$result = cancer_15NN
-F1_Score(as.numeric(cancer_data_test$result),as.numeric(cancer_data_test$Class))
- 
+
 #cancer_15NN$prob
 #cancer15<-as.data.frame(cancer_15NN.prob)
 # ?MLmetrics
 #attr(cancer_15NN, prob)
 # attributes(cancer_15NN)$prob
+```
 
+### AUC
+The area under our ROC for this model is 0.458, which is not great. The shape of the curve also also suggests that the model is not much better at predicting whether a cancer patient will survive than random guessing.
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
 # install.packages("ROCR")
 library(ROCR)
 
 pred <- prediction(as.numeric(attributes(cancer_15NN)$prob), as.numeric(cancer_data_test$Class))
-View(pred)
+# View(pred)
 
 perf <- performance(pred,"tpr","fpr")
 
@@ -311,11 +332,12 @@ plot(perf, colorize=TRUE)
 abline(a=0, b= 1)
 
 perf_AUC <- performance(pred,"auc")
-
 print(perf_AUC@y.values)
+```
 
-
-
+## Adjust threshold
+We also saw more of a problem with false negatives relative to how many actual negatives vs positives that we had: 4 out of the 12 predictions on actual negatives were false (predicted 1) while 5 out of the 15 predictions on actual positives were false (predicted 0). So, we adjusted the threshold to 0.7 to see what this would do to our model. We have reduced our number of false negatives by 1, but we have far more false positives now (11 instead of 5). Our accuracy, sensitivity, specificity, and kappa have all declined significantly, as well, so we don't see this adjusting of the threshold as helpful with this model. 
+```{r, message=FALSE, echo = FALSE, warning=FALSE}
 cancer_refactor <- as.data.frame(cancer_15NN)
 probs <- attributes(cancer_15NN)$prob
 cancer_refactor <- cbind(cancer_refactor, probs)
@@ -325,3 +347,9 @@ cancer_refactor_1 <- mutate(cancer_refactor_1, `0` = ifelse(cancer_15NN == "0", 
 
 adjust_thres(cancer_refactor_1$`1`,.70, as.factor(cancer_data_test$Class))
 ```
+
+
+## Concluding Analysis
+This lab was very informative for evaluating our ML models in R. We had a more fruitful analysis with our first data set because we had far more data after cleaning. It was hard to analyze our second model, since small adjustments could make massive changes and not be very representative. For example, we may have found that adjusting the threshold to something above 0.5 was actually helpful if we had a larger data set. 
+
+For future extensions from this lab, we would have liked to create a function that adjusted the threshold for our model for all increments of 0.05 and made the decisions as to which threshold was "best". It would be very dependent on the goal of the model, as well as the data itself, as to what metric(s) to prioritize. Since we were just practicing evaluating models with 2 random data sets, we weren't able to make a decision as to what was most important with our model. That being said, if Yelp wanted to use the model trained on data set #1 (ratings for all ratings for Austin coffee shops) to sort coffee shops by top-rated, for example, they could decide to prioritize accuracy.
