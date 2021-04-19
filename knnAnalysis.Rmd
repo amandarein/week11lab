@@ -37,24 +37,20 @@ coffee_data[coffee_data=="#VALUE!"] <- NA
 gg_miss_var(coffee_data)
 ```
 
-We removed the columns with many missing values and columns that affect accuracy. After that, we found that the base level for identifying if a patient would survive or not was 80.0%. In other words, there is an 80% chance that a coffee shop is high-rated.
+We removed the columns with many missing values and columns that affect accuracy. After that, we found that the base level for identifying if a patient would survive or not was 83.3%.
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 coffee_data_2 <- coffee_data[complete.cases(coffee_data), ]
 coffee_data_2 <- coffee_data_2[, -c(1, 2, 3, 4, 5)]
-
 split <- table(coffee_data_2$bool_HIGH)[2] / sum(table(coffee_data_2$bool_HIGH))
-
-# The base rate is 80.0% for identifying whether a coffee shop was high-rated or not.
-
+split
+# The base rate is 83.3% for identifying whether a coffee shop was high-rated or not.
 coffee_data_2 <- sapply(coffee_data_2, as.numeric)
 # Scale the data
 coffee_data_2 <- as.data.frame(coffee_data_2)
-
 coffee_data_2[, -c(1)] <- lapply(coffee_data_2[, -c(1)],function(x) scale(x))
 # Find correlations in the data 
 stat_correlations <- cor(coffee_data_2)
 # View(stat_correlations)
-
 ```
 
 ## Plot k vs. accuracy to see how many neighbors to use
@@ -147,7 +143,6 @@ We calculate the Log Loss of the model to be 0.55. As Log Loss is a measure of u
 install.packages("MLmetrics")
 library(MLmetrics)
 LogLoss(as.numeric(attributes(coffee_11NN)$prob), as.numeric(coffee_data_test$bool_HIGH))
-
 # coffee_data_test$result = coffee_11NN
 # F1_Score(as.numeric(coffee_data_test$result),as.numeric(coffee_data_test$bool_HIGH))
 ```
@@ -157,15 +152,11 @@ The area under the receiver operating curve (ROC) below tells us how much the mo
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 install.packages("ROCR")
 library(ROCR)
-
 pred <- prediction(as.numeric(attributes(coffee_11NN)$prob), as.numeric(coffee_data_test$bool_HIGH))
 # View(pred)
-
 perf <- performance(pred,"tpr","fpr")
-
 plot(perf, colorize=TRUE)
 abline(a=0, b= 1)
-
 perf_AUC <- performance(pred,"auc")
 perf_AUC@y.values[[1]]
 ```
@@ -178,16 +169,12 @@ adjust_thres <- function(x, y, z) {
   thres <- as.factor(ifelse(x > y, 1,0))
   confusionMatrix(thres, z, positive = "1", dnn=c("Prediction", "Actual"), mode = "everything")
 }
-
 coffee_refactor <- as.data.frame(coffee_11NN)
 probs <- attributes(coffee_11NN)$prob
 coffee_refactor <- cbind(coffee_refactor, probs)
 coffee_refactor_1 <- mutate(coffee_refactor, `1` = ifelse(coffee_11NN == "1", probs, (1-probs)))
 coffee_refactor_1 <- mutate(coffee_refactor_1, `0` = ifelse(coffee_11NN == "0", probs, (1-probs)))
-
-
 adjust_thres(coffee_refactor_1$`1`,.60, as.factor(coffee_data_test$bool_HIGH))
-
 ```
 
 
@@ -309,7 +296,6 @@ The Log Loss score we get with this data is 5.8, which is very poor. This means 
 # install.packages("MLmetrics")
 library(MLmetrics)
 LogLoss(as.numeric(attributes(cancer_3NN)$prob), as.numeric(cancer_data_test$Class))
-
 #cancer_3NN$prob
 #cancer3<-as.data.frame(cancer_3NN.prob)
 # ?MLmetrics
@@ -322,15 +308,11 @@ The area under our ROC for this model is 0.458, which is not great. The shape of
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 # install.packages("ROCR")
 library(ROCR)
-
 pred <- prediction(as.numeric(attributes(cancer_3NN)$prob), as.numeric(cancer_data_test$Class))
 # View(pred)
-
 perf <- performance(pred,"tpr","fpr")
-
 plot(perf, colorize=TRUE)
 abline(a=0, b= 1)
-
 perf_AUC <- performance(pred,"auc")
 perf_AUC@y.values[[1]]
 ```
@@ -343,8 +325,6 @@ probs <- attributes(cancer_3NN)$prob
 cancer_refactor <- cbind(cancer_refactor, probs)
 cancer_refactor_1 <- mutate(cancer_refactor, `1` = ifelse(cancer_3NN == "1", probs, (1-probs)))
 cancer_refactor_1 <- mutate(cancer_refactor_1, `0` = ifelse(cancer_3NN == "0", probs, (1-probs)))
-
-
 adjust_thres(cancer_refactor_1$`1`,.70, as.factor(cancer_data_test$Class))
 ```
 
