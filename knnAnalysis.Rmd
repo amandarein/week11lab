@@ -26,7 +26,7 @@ library(ggplot2)
 ```
 
 # Data set 1: Reviews of coffee shops
-The first data set contains information from Yelp ratings for coffee shops in Austin, Texas. Each Yelp rating is logged with the name of the coffee shop, the content of the review, the numeric rating, the relative rating, whether the rating is considered high or low, the overall sentiment, the sentiment about the shop's vibe, the sentiment about its tea offerings,  the sentiment about the service they offer, etc. The question we are hoping to answer is as follows: after cleaning data to remove the data points creating noise, can we create a KNN model that uses some of these rating factors to predict whether or not the coffee shop was high rated?
+The first data set contains information from Yelp ratings for coffee shops in Austin, Texas. Each Yelp rating is logged with the name of the coffee shop, the content of the review, the numeric rating, the relative rating, whether the rating is considered high or low, the overall sentiment, the sentiment about the shop's vibe, the sentiment about its tea offerings,  the sentiment about the service they offer, etc. The question we are hoping to answer is as follows: after cleaning data to remove the data points creating noise, can we create a KNN model that uses some of these rating factors to tell us which coffee shops will be good and highly rated?
 
 ## Find out which columns have many missing values so that they can be discarded
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
@@ -165,7 +165,11 @@ perf_AUC@y.values[[1]]
 Based on the model, we have a pretty high Sensitivity, or TPR, which means we are correctly identifying a majority of the high-rated coffee shops. However, our FPR and Specificity are pretty bad for this model. Our high FPR means there are a lot of low-rated coffee shops that are being incorrectly identified as good coffee shops. In addition, our specificity of 24% means less than a fourth of low-rated coffee shops are being correctly identified as bad coffee shops. We believe this may be a result of our unbalanced dataset (747 high-rated shops compared to 154 low-rated shops). Therefore, Kappa is a useful metric for our dataset because it takes into account the imbalance in class distribution. Instead of focusing on improving the overall accuracy (which is already pretty good), we will focus on improving the Kappa value. In terms of our overall question, we would rather have more false negatives than false positives because we prefer to have a smaller list of high-rated coffee shops that are actually good! Because of this, we will work on improving the Specificity in addition to the Kappa.
 
 ## Adjust threshold
+<<<<<<< HEAD
 We decided to adjust the threshold of the model to see if we can further improve the Kappa. We have more false positives than false negatives according to our confusion matrix, so we will adjust the threshold to be higher. A higher threshold reduces the amount of times that the model will predict that the coffee shop is high-rated. Clearly, adjusting the threshold here to 0.6 has reduced the number of false positives that we get (117 to 105) but increased the number of false negatives (20 to 35!). The accuracy and sensitivity have also gone down, though the specificity went up from 24% to 32.5%. The Kappa score increased from 0.285 to 0.338, which is a good sign that the model is improving. 
+=======
+We decided to adjust the threshold of the model to see if we can further improve accuracy. We have more false positives than false negatives according to our confusion matrix, so we will adjust the threshold to be higher. A higher threshold reduces the amount of times that the model will predict that the coffee shop is high-rated. Clearly, adjusting the threshold here to 0.6 has reduced the number of false positives that we get (117 to 104) but increased the number of false negatives (20 to 35!). The accuracy and sensitivity have also gone down, though the specificity went up. 
+>>>>>>> 3c5331f7005369c9b057185111e846a8772c21db
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 adjust_thres <- function(x, y, z) {
   #x=pred_probablities, y=threshold, z=test_outcome
@@ -182,7 +186,7 @@ adjust_thres(coffee_refactor_1$`1`,.60, as.factor(coffee_data_test$bool_HIGH))
 
 
 # Data set 2: Outcomes of cancer patients
-This second data set contains the overall outcomes of cancer patients, along with many other data points about the patient's health. The question we are hoping to answer is as follows: after cleaning data and removing any data points that create noise, can we create a KNN model that uses some health factors to predict whether or not the patient had a positive outcome at a rate better than the baseline?
+This second data set contains the overall outcomes of cancer patients, along with many other data points about the patient's health. The question we are hoping to answer is as follows: after cleaning data and removing any data points that create noise, can we create a KNN model that uses some health factors to tell us if someone has a better chance of a positive outcome?
 
 ## Find out which columns have many missing values so that they can be discarded
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
@@ -329,7 +333,11 @@ probs <- attributes(cancer_3NN)$prob
 cancer_refactor <- cbind(cancer_refactor, probs)
 cancer_refactor_1 <- mutate(cancer_refactor, `1` = ifelse(cancer_3NN == "1", probs, (1-probs)))
 cancer_refactor_1 <- mutate(cancer_refactor_1, `0` = ifelse(cancer_3NN == "0", probs, (1-probs)))
+<<<<<<< HEAD
 adjust_thres(cancer_refactor_1$`1`,.30, as.factor(cancer_data_test$Class))
+=======
+adjust_thres(cancer_refactor_1$`1`,.35, as.factor(cancer_data_test$Class))
+>>>>>>> 3c5331f7005369c9b057185111e846a8772c21db
 ```
 
 # Concluding Analysis
