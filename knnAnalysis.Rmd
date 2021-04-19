@@ -116,17 +116,17 @@ kNN_res = table(coffee_11NN,
 # View(kNN_res)
 conf_matrix_initial <- kNN_res
 # conf_matrix_initial
-install.packages("caret")
+#install.packages("caret")
 library(caret)
-install.packages("e1071")
+#install.packages("e1071")
 library(e1071)
-install.packages("Rcpp")
+#install.packages("Rcpp")
 library(Rcpp)
 ```
 
 ## Evaluate model {.tabset}
 ### Confusion matrix
-This confusion matrix tells us that the accuracy is 84.8%, kappa is 28.5%, sensitivity is 97.3%, specificity is 24.0%, and F1 score is 91.4% (printed separately below). These are pretty good statistics, as the accuracy has gone up from our base rate of 80%, though the kappa is pretty low. Kappa measures the degree of agreement among raters, so this is something to keep in mind when analyzing the model.
+This confusion matrix tells us that the accuracy is 84.8%, kappa is 28.5%, sensitivity is 97.3%, specificity is 24.0%, and F1 score is 91.4% (printed separately below). These are pretty good statistics, as the accuracy has gone up from our base rate of 80%, though the kappa is pretty low. Kappa measures the degree of agreement among raters, so this is something to keep in mind when analyzing the model. The true positive rate (TPR), also known as sensitivity, is 97.32%, which means the model correctly identifies about 97% of good coffee shops as good coffee shops. However, the false positive rate (FPR) is 75.97%, which is the percentage of bad coffee shops that the model incorrectly identifies as good coffee shops. 
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 conf_matrix <- confusionMatrix(as.factor(coffee_11NN), as.factor(coffee_data_test$bool_HIGH), positive = "1", dnn=c("Prediction", "Actual"), mode = "sens_spec")
 conf_matrix # 117 cases of actual = 0 and predicted = 1, 20 cases of actual = 1 and predicted = 0 -- false positive more of an issue
@@ -161,8 +161,11 @@ perf_AUC <- performance(pred,"auc")
 perf_AUC@y.values[[1]]
 ```
 
+## Miss-Classification Errors
+Based on the model, we have a pretty high Sensitivity, or TPR, which means we are correctly identifying a majority of the high-rated coffee shops. However, our FPR and Specificity are pretty bad for this model. Our high FPR means there are a lot of low-rated coffee shops that are being incorrectly identified as good coffee shops. In addition, our specificity of 24% means less than a fourth of low-rated coffee shops are being correctly identified as bad coffee shops. We believe this may be a result of our unbalanced dataset (747 high-rated shops compared to 154 low-rated shops). Therefore, Kappa is a useful metric for our dataset because it takes into account the imbalance in class distribution. Instead of focusing on improving the overall accuracy (which is already pretty good), we will focus on improving the Kappa value. In terms of our overall question, we would rather have more false negatives than false positives because we prefer to have a smaller list of high-rated coffee shops that are actually good! Because of this, we will work on improving the Specificity in addition to the Kappa.
+
 ## Adjust threshold
-We decided to adjust the threshold of the model to see if we can further improve accuracy. We have more false positives than false negatives according to our confusion matrix, so we will adjust the threshold to be higher. A higher threshold reduces the amount of times that the model will predict that the coffee shop is high-rated. Clearly, adjusting the threshold here to 0.6 has reduced the number of false positives that we get (117 to 105) but increased the number of false negatives (20 to 35!). The accuracy and sensitivity have also gone down, though the specificity went up. 
+We decided to adjust the threshold of the model to see if we can further improve the Kappa. We have more false positives than false negatives according to our confusion matrix, so we will adjust the threshold to be higher. A higher threshold reduces the amount of times that the model will predict that the coffee shop is high-rated. Clearly, adjusting the threshold here to 0.6 has reduced the number of false positives that we get (117 to 105) but increased the number of false negatives (20 to 35!). The accuracy and sensitivity have also gone down, though the specificity went up from 24% to 32.5%. The Kappa score increased from 0.285 to 0.338, which is a good sign that the model is improving. 
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 adjust_thres <- function(x, y, z) {
   #x=pred_probablities, y=threshold, z=test_outcome
@@ -277,9 +280,7 @@ library(e1071)
 ## Evaluate model {.tabset}
 
 ### Confusion matrix
-Originally, the baseline accuracy was around 60%;  accuracy is now up to 71.8%. The sensitivity is 75%, while the specificity is 67%. This means that the false positive rate is 33%, which is a bit high but certainly not terrible. The F1 value is 76.9%. All of these statistics are fairly good, especially when you compare the baseline to the prediction model.
-
-The kappa value is 0.410, which is relatively weak for a kappa value.
+Originally, the baseline accuracy was around 60%;  accuracy is now up to 71.8%. The sensitivity/TPR is 75%, which means about 3/4 of patients who survived are correctly identified as survivors. The specificity is 67% and the false positive rate (FPR) is 33%, which is a bit high (about 1/3 of patients that died are being identified as survivors) but certainly not terrible. The F1 value is 76.9%. All of these statistics are fairly good, especially when you compare the baseline to the prediction model. The kappa value is 0.410, which is pretty good given the slightly unbalanced dataset.
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 conf_matrix <- confusionMatrix(as.factor(cancer_3NN), as.factor(cancer_data_test$Class), positive = "1", dnn=c("Prediction", "Actual"), mode = "sens_spec")
 conf_matrix
@@ -317,15 +318,18 @@ perf_AUC <- performance(pred,"auc")
 perf_AUC@y.values[[1]]
 ```
 
+## Miss-Classification Errors
+The model we created does a good job at correctly identifying survivors (Sensitivity/TPR = 75%), but could definitely be improved. We would like to see a decrease in the FPR so we can reduce the amount of people who passed away that are categorized as survivors. There are two main issues with our data: the data set is small (32 observations) and the data we do have is unbalanced (20 survivors compared to 12 patients who died). Therefore, we will focus again on increasing the Kappa value to measure model improvement since it takes into account the imbalance of the classification groups. Additionally, we will work towards increasing Sensitivity/TPR and decreasing the FPR to ensure we are correctly classifying as many survivors as possible. We believe it is most important to be confident in predicting true positives so we do not incorrectly give a terminal patient the hope of survival.
+
 ## Adjust threshold
-We also saw more of a problem with false negatives relative to how many actual negatives vs positives that we had: 4 out of the 12 predictions on actual negatives were false (predicted 1) while 5 out of the 15 predictions on actual positives were false (predicted 0). So, we adjusted the threshold to 0.7 to see what this would do to our model. We have reduced our number of false negatives by 1, but we have far more false positives now (11 instead of 5). Our accuracy, sensitivity, specificity, and kappa have all declined significantly, as well, so we don't see this adjusting of the threshold as helpful with this model. 
+We also saw more of a problem with false negatives relative to how many actual negatives vs positives that we had: 4 out of the 12 predictions on actual negatives were false (predicted 1) while 5 out of the 15 predictions on actual positives were false (predicted 0). So, we adjusted the threshold to 0.3 to see what this would do to our model. We have reduced our number of false negatives by 3, but we have far more false positives now (9 instead of 4). Although our sensitivity/TPR increased to 90%, our accuracy, specificity, and kappa have all declined significantly, so we don't see this adjusting of the threshold as helpful with this model. 
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
 cancer_refactor <- as.data.frame(cancer_3NN)
 probs <- attributes(cancer_3NN)$prob
 cancer_refactor <- cbind(cancer_refactor, probs)
 cancer_refactor_1 <- mutate(cancer_refactor, `1` = ifelse(cancer_3NN == "1", probs, (1-probs)))
 cancer_refactor_1 <- mutate(cancer_refactor_1, `0` = ifelse(cancer_3NN == "0", probs, (1-probs)))
-adjust_thres(cancer_refactor_1$`1`,.70, as.factor(cancer_data_test$Class))
+adjust_thres(cancer_refactor_1$`1`,.30, as.factor(cancer_data_test$Class))
 ```
 
 # Concluding Analysis
