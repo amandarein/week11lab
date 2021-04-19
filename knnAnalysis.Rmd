@@ -26,7 +26,7 @@ library(ggplot2)
 ```
 
 # Data set 1: Reviews of coffee shops
-The first data set contains information from Yelp ratings for coffee shops in Austin, Texas. Each Yelp rating is logged with the name of the coffee shop, the content of the review, the numeric rating, the relative rating, whether the rating is considered high or low, the overall sentiment, the sentiment about the shop's vibe, the sentiment about its tea offerings,  the sentiment about the service they offer, etc. The question we are hoping to answer is as follows: after cleaning data to remove the data points creating noise, can we create a KNN model that uses some of these rating factors to predict whether or not the coffee shop was high rated?
+The first data set contains information from Yelp ratings for coffee shops in Austin, Texas. Each Yelp rating is logged with the name of the coffee shop, the content of the review, the numeric rating, the relative rating, whether the rating is considered high or low, the overall sentiment, the sentiment about the shop's vibe, the sentiment about its tea offerings,  the sentiment about the service they offer, etc. The question we are hoping to answer is as follows: after cleaning data to remove the data points creating noise, can we create a KNN model that uses some of these rating factors to tell us which coffee shops will be good and highly rated?
 
 ## Find out which columns have many missing values so that they can be discarded
 ```{r, message=FALSE, echo = FALSE, warning=FALSE}
